@@ -1,0 +1,12 @@
+INDEX VERSION 1.130+/Users/jlarson/eclipse-workspace/.metadata/.plugins/org.eclipse.jdt.core
+397432832.index
+3228759226.index
+2303238206.index
+3665656385.index
+2267866203.index
+988717512.index
+2515363479.index
+2451144055.index
+996007636.index
+3926017581.index
+1070172870.index

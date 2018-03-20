@@ -1,0 +1,225 @@
+package org.graphics;
+
+import java.awt.Dimension;
+import java.awt.Toolkit;
+
+import com.jogamp.opengl.GL2;
+import com.jogamp.opengl.GLAutoDrawable;
+import com.jogamp.opengl.GLEventListener;
+import com.jogamp.opengl.glu.GLU;
+import com.jogamp.opengl.glu.GLUquadric;
+
+public class EventListener implements GLEventListener{
+
+	private static float DEG2RAD = 3.14159f/180f;
+	private static final float RAIL_HEIGHT = 1.40625f;
+	private static final float LIGHT_POSITION = 1;
+	public static int rotation = 0;
+	private static float pos = 0;
+	
+	@Override
+	public void display(GLAutoDrawable drawable) {
+		GL2 gl = drawable.getGL().getGL2();
+		setCamera(gl, Renderer.glu, 100);
+		//gl.glEnable(GL2.GL_DEPTH_TEST);
+        gl.glDepthFunc(GL2.GL_LEQUAL);
+        gl.glShadeModel(GL2.GL_SMOOTH);
+		gl.glClear(GL2.GL_COLOR_BUFFER_BIT);
+        gl.glHint(GL2.GL_PERSPECTIVE_CORRECTION_HINT, GL2.GL_NICEST);	
+		
+		//setup lighting function
+		setLighting(gl);
+		
+        //playing area
+        drawCube(gl, 60, 30, -2, 120, 60, 0);
+        	//sides
+        setColor(gl, new float[] {0.36f, 0.25f, 0.20f});
+        drawCube(gl, 63, 32, -2+RAIL_HEIGHT, 126, 4, RAIL_HEIGHT);
+        drawCube(gl, 63, -28, -2+RAIL_HEIGHT, 126, 4, RAIL_HEIGHT);
+        drawCube(gl, 63, 32, -2+RAIL_HEIGHT, 4, 64, RAIL_HEIGHT);
+        drawCube(gl, -59, 32, -2+RAIL_HEIGHT, 4, 64, RAIL_HEIGHT);
+        
+        //draw pockets
+        setColor(gl, new float[] {0f, 0f, 0f});
+        drawCircle(gl, 2f, 58, 28);
+        drawCircle(gl, 2f, 58, -28);
+        drawCircle(gl, 2f, 0, -28);
+        drawCircle(gl, 2f, -58, -28);
+        drawCircle(gl, 2f, -58, 28);
+        drawCircle(gl, 2f, 0, 28);
+        setColor(gl, new float[] {.5f, .5f, .5f});
+        drawCircle(gl, 5.125f, -28+pos, 0);
+        
+        //set up sphere
+        GLUquadric earth = Renderer.glu.gluNewQuadric();
+        Renderer.glu.gluQuadricDrawStyle(earth, GLU.GLU_FILL);
+        Renderer.glu.gluQuadricNormals(earth, GLU.GLU_FLAT);
+        Renderer.glu.gluQuadricOrientation(earth, GLU.GLU_OUTSIDE);
+        final float radius = 1.125f;
+        final int slices = 150;
+        final int stacks = 150;
+        
+        //cue ball translate
+
+        setColor(gl, new float[] {1f, 1f, 1f});
+        positionBall(gl, earth, radius, slices, stacks, -28 + pos, 0, 0);
+        pos++;
+        	//top of triangle translate
+        setColor(gl, new float[] {0f, 0f, 1f});
+        positionBall(gl, earth, radius, slices, stacks, 28, 0, 0);
+        
+        //second row translates
+        setColor(gl, new float[] {1f, 0f, 0f});
+        positionBall(gl, earth, radius, slices, stacks, 30.25f, -1.125f, 0);
+        setColor(gl, new float[] {0f, 1f, 0f});
+        positionBall(gl, earth, radius, slices, stacks, 30.25f, 1.125f, 0);
+        
+        //third row translates
+        setColor(gl, new float[] {0f, 1f, 0f});
+        positionBall(gl, earth, radius, slices, stacks, 32.5f, 2.25f, 0);
+        setColor(gl, new float[] {0f, 0f, 0f});
+        positionBall(gl, earth, radius, slices, stacks, 32.5f, 0f, 0);
+        setColor(gl, new float[] {.5f, 0f, .5f});
+        positionBall(gl, earth, radius, slices, stacks, 32.5f, -2.25f, 0);
+        
+        //fourth row translates
+        setColor(gl, new float[] {0.5f, 1f, 0f});
+        positionBall(gl, earth, radius, slices, stacks, 34.75f, 3.375f, 0);
+        setColor(gl, new float[] {1f, .5f, 0f});
+        positionBall(gl, earth, radius, slices, stacks, 34.75f, 1.125f, 0);
+        setColor(gl, new float[] {0f, 1f, .5f});
+        positionBall(gl, earth, radius, slices, stacks, 34.75f, -1.125f, 0);
+        setColor(gl, new float[] {0f, .5f, .5f});
+        positionBall(gl, earth, radius, slices, stacks, 34.75f, -3.375f, 0);
+        
+        
+        Renderer.glu.gluDeleteQuadric(earth);
+	}
+	
+	@Override
+	public void dispose(GLAutoDrawable drawable) {
+		// TODO Auto-generated method stub
+		Renderer.animator.stop();
+		System.exit(0);
+	}
+	
+	@Override
+	public void init(GLAutoDrawable drawable) {
+		GL2 gl = drawable.getGL().getGL2();
+		
+		gl.glClearColor(0, 0, 0, 1);
+		
+	}
+	
+	@Override
+	public void reshape(GLAutoDrawable drawable, int x, int y, int width, int height) {
+
+		
+	}
+	
+	private void setCamera(GL2 gl, GLU glu, float distance) {
+        // Change to projection matrix.
+        gl.glMatrixMode(GL2.GL_PROJECTION);
+        gl.glLoadIdentity();
+        Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
+        float width = (float) screenSize.getWidth();
+        float height = (float) screenSize.getHeight();
+        // Perspective.
+        float widthHeightRatio = width / height;
+        glu.gluPerspective(45, widthHeightRatio, 1, 1000);
+        glu.gluLookAt(0, 0, distance, 0, 0, 0, 0, 1, 0);
+        gl.glRotatef(-rotation, 0.0f, 0.0f, 1.0f);
+        // Change back to model view matrix.
+        gl.glMatrixMode(GL2.GL_MODELVIEW);
+        gl.glLoadIdentity();
+    }
+	
+	private void positionBall(GL2 gl, GLUquadric earth, float radius, int slices, int stacks, float x, float y, float z) {
+		 gl.glPushMatrix();
+	        gl.glTranslatef(x, y, z);
+	        Renderer.glu.gluSphere(earth, radius, slices, stacks);
+	    gl.glPopMatrix();
+	}
+	
+	private void setColor(GL2 gl, float[] rgba) {
+		gl.glMaterialfv(GL2.GL_FRONT, GL2.GL_AMBIENT, rgba, 0);
+        gl.glMaterialfv(GL2.GL_FRONT, GL2.GL_SPECULAR, rgba, 0);
+	}
+	
+	private void drawCube(GL2 gl, float x, float y, float z, float width, float height, float depth) {
+		gl.glBegin(GL2.GL_QUADS);
+			gl.glVertex3f(x-width, y-height, z);
+			gl.glVertex3f(x, y-height, z);
+			gl.glVertex3f(x, y, z);
+			gl.glVertex3f(x-width, y, z);
+			//if the depth is not equal to 0, draw the rest of the cube
+			if(depth != 0) {
+				gl.glVertex3f( x, y-height, z ); // Top Right Of The Quad
+				gl.glVertex3f( x-width, y-height, z ); // Top Left Of The Quad
+				gl.glVertex3f( x-width, y-height, z-depth ); // Bottom Left Of The Quad
+				gl.glVertex3f( x, y-height, z-depth ); // Bottom Right Of The Quad 
+				
+				gl.glVertex3f( x, y, z ); // Top Right Of The Quad (Front)
+				gl.glVertex3f( x-width, y, z ); // Top Left Of The Quad (Front)
+				gl.glVertex3f( x-width, y-height, z ); // Bottom Left Of The Quad
+				gl.glVertex3f( x, y-height, z ); // Bottom Right Of The Quad 
+				
+				gl.glVertex3f( x, y-height, z-depth ); // Bottom Left Of The Quad
+				gl.glVertex3f( x-width, y-height, z-depth ); // Bottom Right Of The Quad
+				gl.glVertex3f( x-width, y, z-depth ); // Top Right Of The Quad (Back)
+				gl.glVertex3f( x, y, z-depth ); // Top Left Of The Quad (Back)
+				
+				gl.glVertex3f( x-width, y, z ); // Top Right Of The Quad (Left)
+				gl.glVertex3f( x-width, y, z-depth ); // Top Left Of The Quad (Left)
+				gl.glVertex3f( x-width, y-height, z-depth ); // Bottom Left Of The Quad
+				gl.glVertex3f( x-width, y-height, z ); // Bottom Right Of The Quad 
+				
+				gl.glVertex3f( x, y, z-depth ); // Top Right Of The Quad (Right)
+				gl.glVertex3f( x, y, z ); // Top Left Of The Quad
+				gl.glVertex3f( x, y-height, z ); // Bottom Left Of The Quad
+				gl.glVertex3f( x, y-height, z-depth ); // Bottom Right Of The Quad
+				
+			}
+		gl.glEnd();
+	}
+	
+	 
+	private void drawCircle(GL2 gl, float radius, float x, float y)
+	{
+		gl.glBegin(GL2.GL_TRIANGLE_FAN);
+		gl.glPushMatrix();
+		   	gl.glVertex3f(x, y, 0);
+		 
+			for (int i=0; i < 360; i++)
+			{
+				float degInRad = i*DEG2RAD;
+				float x_vert = (float) Math.cos(degInRad)*radius;
+		      	float y_vert = (float) Math.sin(degInRad)*radius;
+				gl.glVertex3f(x_vert + x, y_vert + y, 0);
+			}
+		gl.glPopMatrix();
+		gl.glEnd();
+	}
+	
+	private void setLighting(GL2 gl) {
+		// Draw sphere (possible styles: FILL, LINE, POINT).
+		// Prepare light parameters.
+        float SHINE_ALL_DIRECTIONS = 1;
+        float[] lightPos = {0, 0, LIGHT_POSITION, SHINE_ALL_DIRECTIONS};
+        float[] lightColorAmbient = {0.2f, 0.2f, 0.2f, 1f};
+        float[] lightColorSpecular = {0.8f, 0.8f, 0.8f, 1f};
+
+        // Set light parameters.
+        gl.glLightfv(GL2.GL_LIGHT1, GL2.GL_POSITION, lightPos, 0);
+        gl.glLightfv(GL2.GL_LIGHT1, GL2.GL_AMBIENT, lightColorAmbient, 0);
+        gl.glLightfv(GL2.GL_LIGHT1, GL2.GL_SPECULAR, lightColorSpecular, 0);
+
+        // Enable lighting in GL.
+        gl.glEnable(GL2.GL_LIGHT1);
+        gl.glEnable(GL2.GL_LIGHTING);
+
+        // Set material properties.
+        setColor(gl, new float[] { 0.137255f, 0.556863f, 0.137255f});
+        gl.glMaterialf(GL2.GL_FRONT, GL2.GL_SHININESS, 0.5f);
+	}
+}

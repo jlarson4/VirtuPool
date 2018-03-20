@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Move element &apos;VirtuPool.java&apos; to &apos;GL_VIRTUPOOL/org.display&apos;&#x0A;- Original project: &apos;GL_VIRTUPOOL&apos;&#x0A;- Destination element: &apos;GL_VIRTUPOOL/org.display&apos;&#x0A;- Original element: &apos;org.graphics.VirtuPool.java&apos;&#x0A;- Update references to refactored element" description="Move compilation unit" destination="/&lt;org.display" element1="/&lt;org.graphics{VirtuPool.java" files="0" flags="589830" folders="0" id="org.eclipse.jdt.ui.move" patterns="*" policy="org.eclipse.jdt.ui.moveResources" qualified="false" references="true" stamp="1512498885181" units="1" version="1.0"/>
+</session>

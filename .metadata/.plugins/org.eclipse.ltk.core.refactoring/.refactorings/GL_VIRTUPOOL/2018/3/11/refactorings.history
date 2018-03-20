@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<session version="1.0">
+<refactoring comment="Copy element &apos;FirstJFX.fxml&apos; to &apos;OpenCVTutorial/src/application&apos;&#x0A;- Original project: &apos;GL_VIRTUPOOL&apos;&#x0A;- Destination element: &apos;OpenCVTutorial/src/application&apos;&#x0A;- Original element: &apos;FirstJFX.fxml&apos;" description="Copy file" destination="=OpenCVTutorial/src&lt;application" element1="org/opencv/FirstJFX.fxml" files="1" flags="589830" folders="0" id="org.eclipse.jdt.ui.copy" policy="org.eclipse.jdt.ui.copyResources" stamp="1520833790084" units="0" version="1.0"/>
+</session>
