@@ -15,15 +15,15 @@
 			</padding>
    <children>
    			<Label text="Hue Start" />
-   			<Slider fx:id="hueStart" blockIncrement="1" max="180" min="0" value="21" />
+   			<Slider fx:id="hueStart" blockIncrement="1" max="180" min="0" value="92" />
    			<Label text="Hue Stop" />
-   			<Slider fx:id="hueStop" blockIncrement="1" max="180" min="0" value="57" />
+   			<Slider fx:id="hueStop" blockIncrement="1" max="180" min="0" value="180" />
    			<Label text="Saturation Start" />
-   			<Slider fx:id="saturationStart" blockIncrement="1" max="255" min="0" value="181" />
+   			<Slider fx:id="saturationStart" blockIncrement="1" max="255" min="0" value="75" />
    			<Label text="Saturation Stop" />
    			<Slider fx:id="saturationStop" blockIncrement="1" max="255" min="0" value="245" />
    			<Label text="Value Start" />
-   			<Slider fx:id="valueStart" blockIncrement="1" max="255" min="0" value="66" />
+   			<Slider fx:id="valueStart" blockIncrement="1" max="255" min="0" value="75" />
    			<Label text="Value Stop" />
    			<Slider fx:id="valueStop" blockIncrement="1" max="255" min="0" value="183" />
    </children>

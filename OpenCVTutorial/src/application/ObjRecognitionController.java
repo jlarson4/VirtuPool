@@ -2,11 +2,13 @@ package application;
 
 import java.awt.Point;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import org.opencv.calib3d.Calib3d;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
@@ -71,6 +73,8 @@ public class ObjRecognitionController
 	// FXML label to show the current values set with the sliders
 	@FXML
 	private Label hsvCurrentValues;
+
+	private Mat H = null;
 	
 	// a timer for acquiring the video stream
 	private ScheduledExecutorService timer;
@@ -82,6 +86,8 @@ public class ObjRecognitionController
 	private int small_dist;
 	//large distance between markers
 	private int large_dist;
+	
+	private Rect area;
 	
 	// property for object binding
 	private ObjectProperty<String> hsvValuesProp;
@@ -113,7 +119,7 @@ public class ObjRecognitionController
 				this.cameraActive = true;
 				
 				//calibrate the cue markers
-				//calibrateCue();
+				calibrateCue();
 				
 				// grab a frame every 33 ms (30 frames/sec)
 				Runnable frameGrabber = new Runnable() {
@@ -172,64 +178,6 @@ public class ObjRecognitionController
 					Mat hsvImage = new Mat();
 					Mat mask = new Mat();
 					Mat morphOutput = new Mat();
-					// remove some noise
-					Imgproc.blur(frame, blurredImage, new Size(20, 20));
-					Imgproc.cvtColor(blurredImage, hsvImage, Imgproc.COLOR_BGR2HSV);
-					
-					//hardcoded - eventually should be retrieved from the calibrator class
-					Scalar minValues = new Scalar(30.5f, 53.5f, 121.3f);
-					Scalar maxValues = new Scalar(50.8f, 96.7f, 185.5f);
-					
-					// threshold HSV image to select tennis balls
-					Core.inRange(hsvImage, minValues, maxValues, mask);
-			//		// show the partial output
-			//		this.updateImageView(this.morphImage, Utils.mat2Image(mask));
-					
-					// morphological operators
-					// dilate with large element
-					Mat dilateElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(20, 20));
-					
-					Imgproc.dilate(mask, morphOutput, dilateElement);
-					Imgproc.dilate(morphOutput, morphOutput, dilateElement);
-					
-					// find the tennis ball(s) contours and show them
-					this.analyzeCalibration(morphOutput, frame);
-				}
-			}
-			catch (Exception e)
-			{
-				// log the (full) error
-				System.err.print("Exception during the image elaboration...");
-				e.printStackTrace();
-			}
-		}
-	}
-	
-	/**
-	 * Get a frame from the opened video stream (if any)
-	 * 
-	 * @return the {@link Image} to show
-	 */
-	private Mat grabFrame()
-	{
-		Mat frame = new Mat();
-		
-		// check if the capture is open
-		if (this.capture.isOpened())
-		{
-			try
-			{
-				// read the current frame
-				this.capture.read(frame);
-				
-				// if the frame is not empty, process it
-				if (!frame.empty())
-				{
-					// init
-					Mat blurredImage = new Mat();
-					Mat hsvImage = new Mat();
-					Mat mask = new Mat();
-					Mat morphOutput = new Mat();
 					
 					// remove some noise
 					Imgproc.blur(frame, blurredImage, new Size(10, 10));
@@ -241,10 +189,8 @@ public class ObjRecognitionController
 					// get thresholding values from the UI
 					// remember: H ranges 0-180, S and V range 0-255
 					//using sliders
-					Scalar minValues = new Scalar(this.hueStart.getValue(), this.saturationStart.getValue(),
-							this.valueStart.getValue());
-					Scalar maxValues = new Scalar(this.hueStop.getValue(), this.saturationStop.getValue(),
-							this.valueStop.getValue());
+					Scalar minValues = new Scalar(this.hueStart.getValue(),  75f, 75f); //new Scalar(this.hueStart.getValue(),);
+					Scalar maxValues = new Scalar(this.hueStop.getValue(), 255f, 255f); //(this.hueStop.getValue(), this.saturationStop.getValue(), this.valueStop.getValue());
 					
 					// show the current selected HSV range
 					String valuesToPrint = "Hue range: " + minValues.val[0] + "-" + maxValues.val[0]
@@ -265,10 +211,14 @@ public class ObjRecognitionController
 					
 					// morphological operators
 					// dilate with large element, erode with small ones
-					Mat dilateElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(24, 24));
-					Mat erodeElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(12, 12));
+//					Mat dilateElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(24, 24));
+					Mat erodeElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(2, 2));
+
+					Mat dilateElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(20, 20));
 					
 					Imgproc.erode(mask, morphOutput, erodeElement);
+					Imgproc.erode(morphOutput, morphOutput, erodeElement);
+					Imgproc.erode(morphOutput, morphOutput, erodeElement);
 					Imgproc.erode(morphOutput, morphOutput, erodeElement);
 					
 					Imgproc.dilate(morphOutput, morphOutput, dilateElement);
@@ -278,63 +228,51 @@ public class ObjRecognitionController
 					this.updateImageView(this.morphImage, Utils.mat2Image(morphOutput));
 					
 					// find the tennis ball(s) contours and show them
-					frame = this.findAndDrawCueBall(morphOutput, frame);
-
+					this.analyzeCalibration(morphOutput, frame);
 				}
+			}
+			catch (Exception e)
+			{
+				// log the (full) error
+				System.err.print("Exception during the image elaboration...");
+				e.printStackTrace();
+			}
+		}
+	}
+	
+	/**
+	 * Get a frame from the opened video stream (if any)
+	 * 
+	 * @return the {@link Image} to show
+	 */
+	
+	private Mat grabFrame()
+	{
+		Mat frame = new Mat();
+		
+		// check if the capture is open
+		if (this.capture.isOpened())
+		{
+			try
+			{
+				// read the current frame
+				this.capture.read(frame);
 				
 				// if the frame is not empty, process it
 				if (!frame.empty())
 				{
-					// init
-					Mat blurredImage = new Mat();
-					Mat hsvImage = new Mat();
-					Mat mask = new Mat();
-					Mat morphOutput = new Mat();
-					// remove some noise
-					Imgproc.blur(frame, blurredImage, new Size(20, 20));
-					Imgproc.cvtColor(blurredImage, hsvImage, Imgproc.COLOR_BGR2HSV);
-					
-					
-					
-					// get thresholding values from the UI
-					// remember: H ranges 0-180, S and V range 0-255
-					//using sliders
-//					Scalar minValues = new Scalar(this.hueStart.getValue(), this.saturationStart.getValue(),
-//							this.valueStart.getValue());
-//					Scalar maxValues = new Scalar(this.hueStop.getValue(), this.saturationStop.getValue(),
-//							this.valueStop.getValue());
-
-					//hardcoded
-					Scalar minValues = new Scalar(30.5f, 53.5f, 121.3f);
-					Scalar maxValues = new Scalar(50.8f, 96.7f, 185.5f);
-					
-					// show the current selected HSV range
-					String valuesToPrint = "Hue range: " + minValues.val[0] + "-" + maxValues.val[0]
-							+ "\tSaturation range: " + minValues.val[1] + "-" + maxValues.val[1] + "\tValue range: "
-							+ minValues.val[2] + "-" + maxValues.val[2];
-					//Utils.onFXThread(this.hsvValuesProp, valuesToPrint);
-					
-					// threshold HSV image to select tennis balls
-					Core.inRange(hsvImage, minValues, maxValues, mask);
-//					// show the partial output
-//					this.updateImageView(this.morphImage, Utils.mat2Image(mask));
-					
-					// morphological operators
-					// dilate with large element, erode with small ones
-					Mat dilateElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(20, 20));
-					
-					Imgproc.dilate(mask, morphOutput, dilateElement);
-					//Imgproc.dilate(morphOutput, morphOutput, dilateElement);
-					
-					// show the partial output
-					//this.updateImageView(this.morphImage, Utils.mat2Image(morphOutput));
-					
-					// find the tennis ball(s) contours and show them
-					frame = this.findAndDrawBalls(morphOutput, frame);
-					//this.updateImageView(this.morphImage, Utils.mat2Image(frame));
+					if(H != null) {
+						Mat temp_frame = frame;
+						Imgproc.warpPerspective(temp_frame, frame, H, new Size(frame.size().width, frame.size().height));
+						frame = this.findMarkers(frame,  frame);
+						//frame = this.findAndCircle(frame);
+						
+					}
+					else {
+						this.calibrateCue();
+					}
 
 				}
-				
 			}
 			catch (Exception e)
 			{
@@ -359,7 +297,9 @@ public class ObjRecognitionController
 		// if any contour exist...
 		if (hierarchy.size().height > 0 && hierarchy.size().width > 0)
 		{
-			ArrayList<Point> marker_points = new ArrayList<>();
+
+			List<org.opencv.core.Point> sceneList = new LinkedList<org.opencv.core.Point>();
+			
 			// for each contour, display it in blue
 			for (int i = 0; i >= 0; i = (int) hierarchy.get(0, i)[0])
 			{
@@ -368,81 +308,25 @@ public class ObjRecognitionController
 				//get bounding rectangle of each contour
 				MatOfPoint2f contours_poly = new MatOfPoint2f();
 				MatOfPoint2f  NewMtx = new MatOfPoint2f( contours.get(i).toArray() );
-				Imgproc.approxPolyDP(NewMtx, contours_poly, 3d, true);
+				Imgproc.approxPolyDP(NewMtx, contours_poly, 0.1*Imgproc.arcLength(NewMtx,true), true);
 				MatOfPoint  new_poly = new MatOfPoint( contours_poly.toArray() );
 				Rect r =  Imgproc.boundingRect(new_poly); 
-				
-				//check rectangle to see if it should be processed
-				if((r.width * r.height) < 10000 && (r.width * r.height) > 500) {
-					Moments M = Imgproc.moments(contours.get(i), false);
-					int cX = (int) (M.get_m10() / M.get_m00());
-					int cY = (int) (M.get_m01() / M.get_m00());
-					marker_points.add(new Point(cX, cY));
-					Imgproc.drawContours(frame, contours, i, new Scalar(250, 0, 0));
-					//System.out.print("Cue Marker Center: (" + cX + ", " + cY + ")\n");
+				this.area = r;
+				if(H == null) {
+					sceneList.add(new org.opencv.core.Point(r.x, r.y));
+					sceneList.add(new org.opencv.core.Point(r.x, r.height + r.y));
+					sceneList.add(new org.opencv.core.Point(r.width + r.x, r.height + r.y));
+					sceneList.add(new org.opencv.core.Point(r.width + r.x,r.y));
+					MatOfPoint2f obj = new MatOfPoint2f();
+					obj.fromList(sceneList);
+					
+					H = Calib3d.findHomography(contours_poly, obj);
 				}
-			}
-			
-			for(int i = 1; i < marker_points.size(); i++) {
-				//System.out.print("Distance between points: (" + marker_points.get(0).distance(marker_points.get(i)) + ")\n");
+					
 			}
 		}
 	}
-	/**
-	 * Given a binary image containing one or more closed surfaces, use it as a
-	 * mask to find and highlight the objects contours
-	 * 
-	 * @param maskedImage
-	 *            the binary image to be used as a mask
-	 * @param frame
-	 *            the original {@link Mat} image to be used for drawing the
-	 *            objects contours
-	 * @return the {@link Mat} image with the objects contours framed
-	 */
-	private Mat findAndDrawBalls(Mat maskedImage, Mat frame)
-	{
-		// init
-		List<MatOfPoint> contours = new ArrayList<>();
-		Mat hierarchy = new Mat();
-		
-		// find contours
-		Imgproc.findContours(maskedImage, contours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_NONE);
-		
-		// if any contour exist...
-		if (hierarchy.size().height > 0 && hierarchy.size().width > 0)
-		{
-			ArrayList<Point> marker_points = new ArrayList<>();
-			// for each contour, display it in blue
-			for (int i = 0; i >= 0; i = (int) hierarchy.get(0, i)[0])
-			{
 
-				
-				//get bounding rectangle of each contour
-				MatOfPoint2f contours_poly = new MatOfPoint2f();
-				MatOfPoint2f  NewMtx = new MatOfPoint2f( contours.get(i).toArray() );
-				Imgproc.approxPolyDP(NewMtx, contours_poly, 3d, true);
-				MatOfPoint  new_poly = new MatOfPoint( contours_poly.toArray() );
-				Rect r =  Imgproc.boundingRect(new_poly); 
-				
-				//check rectangle to see if it should be processed
-				if((r.width * r.height) < 10000 && (r.width * r.height) > 500) {
-					Moments M = Imgproc.moments(contours.get(i), false);
-					int cX = (int) (M.get_m10() / M.get_m00());
-					int cY = (int) (M.get_m01() / M.get_m00());
-					marker_points.add(new Point(cX, cY));
-					Imgproc.drawContours(frame, contours, i, new Scalar(250, 0, 0));
-					//System.out.print("Cue Marker Center: (" + cX + ", " + cY + ")\n");
-				}
-			}
-			
-			for(int i = 1; i < marker_points.size(); i++) {
-				//System.out.print("Distance between points: (" + marker_points.get(0).distance(marker_points.get(i)) + ")\n");
-			}
-		}
-		
-		return frame;
-	}
-	
 	private Mat findAndDrawCueBall(Mat maskedImage, Mat frame)
 	{
 		// init
@@ -455,6 +339,9 @@ public class ObjRecognitionController
 		// if any contour exist...
 		if (hierarchy.size().height > 0 && hierarchy.size().width > 0)
 		{
+
+			List<org.opencv.core.Point> sceneList = new LinkedList<org.opencv.core.Point>();
+			
 			// for each contour, display it in blue
 			for (int i = 0; i >= 0; i = (int) hierarchy.get(0, i)[0])
 			{
@@ -463,25 +350,149 @@ public class ObjRecognitionController
 				//get bounding rectangle of each contour
 				MatOfPoint2f contours_poly = new MatOfPoint2f();
 				MatOfPoint2f  NewMtx = new MatOfPoint2f( contours.get(i).toArray() );
-				Imgproc.approxPolyDP(NewMtx, contours_poly, 3d, true);
+				Imgproc.approxPolyDP(NewMtx, contours_poly, 0.1*Imgproc.arcLength(NewMtx,true), true);
 				MatOfPoint  new_poly = new MatOfPoint( contours_poly.toArray() );
 				Rect r =  Imgproc.boundingRect(new_poly); 
 				
+				if(H == null) {
+					sceneList.add(new org.opencv.core.Point(r.width + r.x,r.y));
+					sceneList.add(new org.opencv.core.Point(r.x, r.y));
+					sceneList.add(new org.opencv.core.Point(r.x, r.height + r.y));
+					sceneList.add(new org.opencv.core.Point(r.width + r.x, r.height + r.y));
+					MatOfPoint2f obj = new MatOfPoint2f();
+					obj.fromList(sceneList);
+					
+					//H = Calib3d.findHomography(contours_poly, obj, Calib3d.LMEDS, 1);
+				}
+				
 				//check rectangle to see if it should be processed
-				System.out.print((r.width * r.height) + "\n");
-				if((r.width * r.height) > 7500) {
-					Moments M = Imgproc.moments(contours.get(i), false);
-					int cX = (int) (M.get_m10() / M.get_m00());
-					int cY = (int) (M.get_m01() / M.get_m00());
-					Imgproc.drawContours(frame, contours, i, new Scalar(250, 0, 0));
-					System.out.print("Cue Ball Center: (" + cX + ", " + cY + ")\n");
+				Moments M = Imgproc.moments(contours.get(i), false);
+				int cX = (int) (M.get_m10() / M.get_m00());
+				int cY = (int) (M.get_m01() / M.get_m00());
+				List<MatOfPoint> temp = new ArrayList<MatOfPoint>();
+				//check rectangle to see if it should be processed
+
+				Point temp3 = new Point(cX, cY);
+				org.opencv.core.Point temp2 = new org.opencv.core.Point(cX, cY);
+				if(this.area.contains(temp2)) {
+					System.out.print(temp3.toString() + "\n");
+
+				}
+				temp.add(new_poly);
+				Imgproc.drawContours(frame, temp, 0, new Scalar(250, 0, 0));
+					
+			}
+		}
+		
+		return frame;
+	}
+
+	private Mat findAndCircle(Mat frame)
+	{
+		Mat blurredImage = new Mat();
+		Mat grayImage = new Mat();
+		Mat mask = new Mat();
+		
+		// remove some noise
+		Imgproc.blur(frame, blurredImage, new Size(10, 10));
+
+		this.updateImageView(this.maskImage, Utils.mat2Image(blurredImage));
+		Imgproc.cvtColor(frame, grayImage, Imgproc.COLOR_BGR2GRAY);
+		Imgproc.GaussianBlur( grayImage, grayImage, new Size(9, 9), 2, 2 );
+		Mat detectedCircles = new Mat();
+		// show the partial output
+	
+		this.updateImageView(this.morphImage, Utils.mat2Image(grayImage));
+		Scalar minValues = new Scalar(this.hueStart.getValue(), this.saturationStart.getValue(), this.valueStart.getValue());
+		Scalar maxValues = new Scalar(this.hueStop.getValue(), this.saturationStop.getValue(), this.valueStop.getValue());
+		Imgproc.HoughCircles(grayImage, detectedCircles, Imgproc.HOUGH_GRADIENT,
+		          1,   // accumulator resolution (size of the image / 2)
+		          (int)this.valueStart.getValue(),  // minimum distance between two circles
+		          (int)this.valueStop.getValue(), // Canny high threshold
+		          (int)this.saturationStart.getValue(), // minimum number of votes
+		          (int)this.hueStart.getValue(), (int)this.hueStop.getValue()); // min and max radius
+		
+
+		// show the current selected HSV range
+		String valuesToPrint = "Hue range: " + minValues.val[0] + "-" + maxValues.val[0]
+		+ "\tSaturation range: " + minValues.val[1] + "-" + maxValues.val[1] + "\tValue range: "
+		+ minValues.val[2] + "-" + maxValues.val[2];
+		Utils.onFXThread(this.hsvValuesProp, valuesToPrint);
+	
+		if (detectedCircles != null && !detectedCircles.empty()) {
+			for(int i = 0; i < detectedCircles.size().width; i++) {
+				double[] vCircle = detectedCircles.get(0, i);
+				org.opencv.core.Point pt = new org.opencv.core.Point((int)Math.round(vCircle[0]), (int)Math.round(vCircle[1]));
+		        int radius = (int)Math.round(vCircle[2]);
+		        if(this.area.contains(pt)) {
+			        Imgproc.circle(frame, pt, radius, new Scalar(255, 0, 0), 2);
+
 				}
 			}
 		}
 		
 		return frame;
 	}
-	
+
+	private Mat findMarkers(Mat maskedImage, Mat frame) {
+		// init
+		Mat blurredImage = new Mat();
+		Mat hsvImage = new Mat();
+		Mat mask = new Mat();
+		Mat morphOutput = new Mat();
+		
+		// remove some noise
+		Imgproc.blur(frame, blurredImage, new Size(10, 10));
+		
+		// convert the frame to HSV
+		Imgproc.cvtColor(blurredImage, hsvImage, Imgproc.COLOR_BGR2HSV);
+		
+
+		// get thresholding values from the UI
+		// remember: H ranges 0-180, S and V range 0-255
+		//using sliders
+		Scalar minValues = new Scalar(this.hueStart.getValue(), 50f, 50f); //new Scalar(this.hueStart.getValue(), this.saturationStart.getValue(), this.valueStart.getValue());
+		Scalar maxValues = new Scalar(this.hueStop.getValue(), 255f, 255f); //(this.hueStop.getValue(), this.saturationStop.getValue(), this.valueStop.getValue());
+		
+		// show the current selected HSV range
+		String valuesToPrint = "Hue range: " + minValues.val[0] + "-" + maxValues.val[0]
+		+ "\tSaturation range: " + minValues.val[1] + "-" + maxValues.val[1] + "\tValue range: "
+		+ minValues.val[2] + "-" + maxValues.val[2];
+		Utils.onFXThread(this.hsvValuesProp, valuesToPrint);
+		
+		// get thresholding values from the UI
+		// remember: H ranges 0-180, S and V range 0-255
+//		Scalar minValues = new Scalar(129.9f, 0f, 228.0f);
+//		Scalar maxValues = new Scalar(156.0f, 47f, 255f);
+		
+		// threshold HSV image to select tennis balls
+		Core.inRange(hsvImage, minValues, maxValues, mask);
+		// show the partial output
+
+		this.updateImageView(this.maskImage, Utils.mat2Image(mask));
+		
+		// morphological operators
+		// dilate with large element, erode with small ones
+//		Mat dilateElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(24, 24));
+		Mat erodeElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(2, 2));
+
+		Mat dilateElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(20, 20));
+		
+		Imgproc.erode(mask, morphOutput, erodeElement);
+		Imgproc.erode(morphOutput, morphOutput, erodeElement);
+		Imgproc.erode(morphOutput, morphOutput, erodeElement);
+		Imgproc.erode(morphOutput, morphOutput, erodeElement);
+		
+		Imgproc.dilate(morphOutput, morphOutput, dilateElement);
+		Imgproc.dilate(morphOutput, morphOutput, dilateElement);
+		
+		// show the partial output
+		this.updateImageView(this.morphImage, Utils.mat2Image(morphOutput));
+		
+		// find the tennis ball(s) contours and show them
+		frame = this.findAndDrawCueBall(morphOutput, frame);
+		return frame;
+	}
 	/**
 	 * Set typical {@link ImageView} properties: a fixed width and the
 	 * information to preserve the original image ration

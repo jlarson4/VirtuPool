@@ -1,12 +1,15 @@
 package opencv;
 
+import java.awt.Color;
 import java.awt.Point;
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import org.opencv.calib3d.Calib3d;
 import org.opencv.core.Core;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfPoint;
@@ -31,6 +34,7 @@ public class ObjRecognitionController
 	private boolean cameraActive;
 	//an arraylist of the position of the queue ball across 10 frames with only a single contour
 	private List<Point> cueValues = new ArrayList<>();
+	private List<Point> restValues = new ArrayList<>();
 	
 	private List<List<Double>> markerCalibrationPoints = new ArrayList<>();
 	
@@ -38,6 +42,16 @@ public class ObjRecognitionController
 	private int missedFrames = 0;
 	private int stillFrames = 0;
 	private int shotPrepFrames = 0;
+	
+	private double rest_angle;
+	private double rest_dist;
+	
+	
+	// homography matrix
+	private Mat H = null;
+	
+	// rectangle that cue ball must reside within
+	private Rect area = null;
 		
 	/**
 	 * The action triggered by pushing the button on the GUI
@@ -67,7 +81,7 @@ public class ObjRecognitionController
 				};
 				
 				this.timer = Executors.newSingleThreadScheduledExecutor();
-				this.timer.scheduleAtFixedRate(frameGrabber, 0, 33, TimeUnit.MILLISECONDS);
+				this.timer.scheduleAtFixedRate(frameGrabber, 0, 66, TimeUnit.MILLISECONDS);
 			}
 			else
 			{
@@ -88,9 +102,9 @@ public class ObjRecognitionController
 	private void calibrateCue(Mat maskedImage) {
 		if(markerCalibrationPoints.size() == 10) {
 			Renderer.calibrated = true;
-			int num = markerCalibrationPoints.size();
+			int num = 10;
 			float temp = 0;
-			for(int i = 0; i < markerCalibrationPoints.size(); i++) {
+			for(int i = 0; i < 10; i++) {
 				float pos = (float) (markerCalibrationPoints.get(i).get(1)/markerCalibrationPoints.get(i).get(0));
 
 				if(pos > 1.9f && pos < 2.1f) {
@@ -100,8 +114,8 @@ public class ObjRecognitionController
 					num--;
 				}
 			}
-
 			Renderer.marker_separation_constant = temp / num;
+			System.out.print(Renderer.marker_separation_constant);
 			setClosed();
 			Renderer.initializeGame();
 		}
@@ -115,39 +129,25 @@ public class ObjRecognitionController
 		// if any contour exist...
 		if (hierarchy.size().height > 0 && hierarchy.size().width > 0)
 		{
-			Moments image_m = Imgproc.moments(maskedImage, false);
-			int imageX = (int) (image_m.get_m10() / image_m.get_m00());
-			int imageY = (int) (image_m.get_m01() / image_m.get_m00());
-			Point image_center = new Point(imageX, imageY);
 			
 			List<Point> marker_points = new ArrayList<>();
 			// for each contour, display it in blue
+
 			for (int i = 0; i >= 0; i = (int) hierarchy.get(0, i)[0])
 			{
-
 				
-				//get bounding rectangle of each contour
-				MatOfPoint2f contours_poly = new MatOfPoint2f();
-				MatOfPoint2f  NewMtx = new MatOfPoint2f( contours.get(i).toArray() );
-				Imgproc.approxPolyDP(NewMtx, contours_poly, 3d, true);
-				MatOfPoint  new_poly = new MatOfPoint( contours_poly.toArray() );
-				Rect r =  Imgproc.boundingRect(new_poly); 
-				
-				//check rectangle to see if it should be processed
-				if((r.width * r.height) < 10000 && (r.width * r.height) > 1000) {
-					Moments M = Imgproc.moments(contours.get(i), false);
-					int cX = (int) (M.get_m10() / M.get_m00());
-					int cY = (int) (M.get_m01() / M.get_m00());
-					Point temp = new Point(cX, cY);
-					if(temp.distance(image_center) < 500) {
-						marker_points.add(temp);
-					}
-				}
+				Moments M = Imgproc.moments(contours.get(i), false);
+				int cX = (int) (M.get_m10() / M.get_m00());
+				int cY = (int) (M.get_m01() / M.get_m00());
+				Point temp = new Point(cX, cY);
+				org.opencv.core.Point temp2 = new org.opencv.core.Point(cX, cY);
+				marker_points.add(temp);
 			}
 			if(marker_points.size() == 3) {
 				List<Double> temp = new ArrayList<>();
 				for(int i = 1; i < marker_points.size(); i++) {
 					temp.add(marker_points.get(0).distance(marker_points.get(i)));
+					System.out.print(temp.toString() + "\n");
 				}
 				markerCalibrationPoints.add(temp);
 			}
@@ -163,7 +163,7 @@ public class ObjRecognitionController
 	{
 		Mat frame = new Mat();
 		
-		// check if the capture is open
+		// check if the capture is open and the cue ball is stationary
 		if (this.capture.isOpened() && !Renderer.cueMoving)
 		{
 			try
@@ -174,6 +174,10 @@ public class ObjRecognitionController
 				// if the frame is not empty, process it
 				if (!frame.empty())
 				{
+					if(H != null) {
+						Mat temp_frame = frame;
+						Imgproc.warpPerspective(temp_frame, frame, H, new Size(frame.size().width, frame.size().height));
+					}
 					Mat blurredImage = new Mat();
 					Mat hsvImage = new Mat();
 					
@@ -183,15 +187,24 @@ public class ObjRecognitionController
 					// convert the frame to HSV
 					Imgproc.cvtColor(blurredImage, hsvImage, Imgproc.COLOR_BGR2HSV);
 					
-					if(!Renderer.cueMoving && Renderer.cuePos == null && Renderer.calibrated) {
+					//if the cue is not located and the game has been calibrated look for the cue ball
+					if( !Renderer.cueMoving && Renderer.cuePos == null && Renderer.calibrated && Renderer.calculatedHomography) {
+						//replace this with circle finder
 						analyzeForCueBall(hsvImage);
-						
-						if(cueValues.size() == 10) {
+
+						if(cueValues.size() >= 10) {
+
 							calculateCuePos();
 						}
 					}
-					if(Renderer.cuePos != null || !Renderer.calibrated) {
+					
+					//if the cue has been located OR the game hasn't been calibrated yet look for markers
+					if(Renderer.calculatedHomography && (Renderer.cuePos != null || !Renderer.calibrated)) {
 						analyzeForMarkers(hsvImage);
+					}
+					//if the game has been calibrated, look for homography
+					else if(!Renderer.calculatedHomography) {
+						findBorders(hsvImage);
 					}
 				}
 			}
@@ -204,27 +217,16 @@ public class ObjRecognitionController
 		}
 	}
 	
-	private void calculateCuePos() {
-		Point temp = new Point(0, 0);
-		for (Point value : cueValues) {
-	        temp.x += value.x;
-	        temp.y += value.y; 
-	    }
-		temp.x /= cueValues.size();
-		temp.y /= cueValues.size();
-		Renderer.cuePos = temp;
-		Renderer.statusLabel.setText("Aim...");
-	}
-
-	private void analyzeForCueBall(Mat hsvImage) {
+	private void findBorders(Mat hsvImage) {
+		// TODO Auto-generated method stub
 		// init
 		Mat mask = new Mat();
 		Mat morphOutput = new Mat();
 		
 		// get thresholding values from the UI
 		// remember: H ranges 0-180, S and V range 0-255
-		Scalar minValues = new Scalar(129.9f, 0f, 228.0f);
-		Scalar maxValues = new Scalar(156.0f, 47f, 255f);
+		Scalar minValues = new Scalar(124f, 50.f, 50f);
+		Scalar maxValues = new Scalar(180f, 255f, 255f);
 		
 		// threshold HSV image to select tennis balls
 		Core.inRange(hsvImage, minValues, maxValues, mask);
@@ -232,8 +234,8 @@ public class ObjRecognitionController
 		
 		// morphological operators
 		// dilate with large element, erode with small ones
-		Mat dilateElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(24, 24));
-		Mat erodeElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(12, 12));
+		Mat dilateElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(20, 20));
+		Mat erodeElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(2, 2));
 		
 		Imgproc.erode(mask, morphOutput, erodeElement);
 		Imgproc.erode(morphOutput, morphOutput, erodeElement);
@@ -243,7 +245,55 @@ public class ObjRecognitionController
 		
 		// show the partial output
 		
-		// find the tennis ball(s) contours and show them
+		// find the cue ball contours and show them
+		this.findAndDrawPockets(morphOutput);
+	}
+
+	private void calculateCuePos() {
+		Point temp = new Point(0, 0);
+		for (Point value : cueValues) {
+	        temp.x += value.x;
+	        temp.y += value.y; 
+	    }
+		temp.x /= cueValues.size();
+		temp.y /= cueValues.size();
+		Renderer.cuePos = temp;
+		cueValues = new ArrayList<>();
+		Renderer.statusLabel.setText("Aim...");
+	}
+
+	private void analyzeForCueBall(Mat hsvImage) {
+		// TODO Auto-generated method stub
+		// init
+		Mat mask = new Mat();
+		Mat morphOutput = new Mat();
+		
+		// get thresholding values from the UI
+		// remember: H ranges 0-180, S and V range 0-255
+		Scalar minValues = new Scalar(109f, 50.f, 50f);
+		Scalar maxValues = new Scalar(143f, 255f, 255f);
+		
+		// threshold HSV image to select tennis balls
+		Core.inRange(hsvImage, minValues, maxValues, mask);
+		// show the partial output
+		
+		// morphological operators
+		// dilate with large element, erode with small ones
+		Mat dilateElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(20, 20));
+		Mat erodeElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(2, 2));
+		
+		Imgproc.erode(mask, morphOutput, erodeElement);
+		Imgproc.erode(morphOutput, morphOutput, erodeElement);
+		Imgproc.erode(morphOutput, morphOutput, erodeElement);
+		Imgproc.erode(morphOutput, morphOutput, erodeElement);
+		
+		
+		Imgproc.dilate(morphOutput, morphOutput, dilateElement);
+		Imgproc.dilate(morphOutput, morphOutput, dilateElement);
+		
+		// show the partial output
+		
+		// find the cue ball contours and show them
 		this.findAndDrawCueBall(morphOutput);
 	}
 	
@@ -253,17 +303,23 @@ public class ObjRecognitionController
 		Mat morphOutput = new Mat();
 		
 		//hardcoded - eventually should be retrieved from the calibrator class
-		Scalar minValues = new Scalar(30.5f, 53.5f, 121.3f);
-		Scalar maxValues = new Scalar(50.8f, 96.7f, 185.5f);
+		Scalar minValues = new Scalar(32f, 75f, 75f);
+		Scalar maxValues = new Scalar(65f, 255f, 255f);
 		
 		// threshold HSV image to select tennis balls
 		Core.inRange(hsvImage, minValues, maxValues, mask);
 		
 		// morphological operators
 		// dilate with large element
+		Mat erodeElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(2, 2));
 		Mat dilateElement = Imgproc.getStructuringElement(Imgproc.MORPH_RECT, new Size(20, 20));
+
+		Imgproc.erode(mask, morphOutput, erodeElement);
+		Imgproc.erode(morphOutput, morphOutput, erodeElement);
+		Imgproc.erode(morphOutput, morphOutput, erodeElement);
+		Imgproc.erode(morphOutput, morphOutput, erodeElement);
 		
-		Imgproc.dilate(mask, morphOutput, dilateElement);
+		Imgproc.dilate(morphOutput, morphOutput, dilateElement);
 		Imgproc.dilate(morphOutput, morphOutput, dilateElement);
 		
 		// find the tennis ball(s) contours and show them
@@ -313,28 +369,46 @@ public class ObjRecognitionController
 				Rect r =  Imgproc.boundingRect(new_poly); 
 				
 				//check rectangle to see if it should be processed
-				if((r.width * r.height) < 10000 && (r.width * r.height) > 1000) {
+				if((r.width * r.height) < 10000 && (r.width * r.height) > 500) {
 					Moments M = Imgproc.moments(contours.get(i), false);
 					int cX = (int) (M.get_m10() / M.get_m00());
 					int cY = (int) (M.get_m01() / M.get_m00());
 					Point temp = new Point(cX, cY);
 					
 					//potential markers must be within 5 marker separations of the cue
-					if(temp.distance(Renderer.cuePos) < 5*Renderer.marker_separation_constant)
+					if(Renderer.cuePos != null && temp.distance(Renderer.cuePos) < 5*Renderer.marker_separation_constant)
 					{
 						marker_points.add(temp);
 					}
-					//System.out.print("Cue Marker Center: (" + cX + ", " + cY + ")\n");
 				}
 			}
-			
 			//check for markers near cue
 			if(Renderer.restPos == null && marker_points.size() > 1) {
+				Renderer.statusLabel.setText("Aim...");
 				Point temp = findClosest(marker_points);
 				if(temp != null) {
-					Renderer.restPos = temp;
+					restValues.add(temp);
+					if(restValues.size() == 5) {
+						boolean is_resting = true;
+						for(int a = 0; a < restValues.size()-1; a++) {
+							for(int b = a+1; b < restValues.size(); b++) {
+								if(restValues.get(a).distance(restValues.get(b)) > 50) {
+									is_resting = false;
+								}
+							}
+						}
+						
+						if(is_resting) {
+							Renderer.restPos = temp;
+							rest_dist = Renderer.restPos.distance(Renderer.cuePos);
+							rest_angle = Math.atan2(Renderer.cuePos.y - Renderer.restPos.y, Renderer.cuePos.x - Renderer.restPos.x);
+							restValues = new ArrayList<>(); 
+						}
+						else {
+							restValues = new ArrayList<>();
+						}
+					}
 				}
-				//System.out.print("RestPos: " + Renderer.restPos + "\n");
 
 			}
 			
@@ -344,21 +418,13 @@ public class ObjRecognitionController
 				if(stillFrames >= 20 && !Renderer.stroke) {
 
 					Renderer.statusLabel.setText("Shoot!");
+					Renderer.stroke_prepped = true;
 					Point p = findClosest(marker_points);
 					if(p != null) {
-						System.out.print(p.distance(Renderer.cuePos) + "\n");
-						if(shotPrepFrames >= 10) {
-							Renderer.stroke_counter = 0;
-							stillFrames = 0;
-							missedFrames = 0;
-							shotPrepFrames = 0;
-							Renderer.restPos = null;
-							Renderer.statusLabel.setText("Aim...");
-						}
-						else if(p.distance(Renderer.cuePos) < Renderer.restPos.distance(Renderer.cuePos)) {
-							shotPrepFrames = 0;
+						 if(p.distance(Renderer.cuePos) < Renderer.restPos.distance(Renderer.cuePos)) {
+							shotPrepFrames++;
 							Renderer.stroke_counter++;
-							if(p.distance(Renderer.cuePos) < Renderer.marker_separation_constant/4) { //65f){
+							if(p.distance(Renderer.cuePos) < Renderer.marker_separation_constant/8) {
 								//SHOOT
 								System.out.print("SHOOTING: " + Renderer.stroke_counter + "\n");
 								Renderer.stroke = true;
@@ -367,34 +433,33 @@ public class ObjRecognitionController
 								shotPrepFrames = 0;
 							} 
 						}
-						else {
-							Renderer.stroke_counter = 0;
-							shotPrepFrames++;
-						}
-					} else {
-						if(shotPrepFrames >= 10) {
+							
+						 else if(shotPrepFrames >= 40 || (p.distance(Renderer.cuePos) > Renderer.restPos.distance(Renderer.cuePos))) {
 							Renderer.stroke_counter = 0;
 							stillFrames = 0;
 							missedFrames = 0;
 							shotPrepFrames = 0;
 							Renderer.restPos = null;
+							rest_dist = 0;
+							rest_angle = 0;
+							Renderer.stroke_prepped = false;
 							Renderer.statusLabel.setText("Aim...");
-						}
-						else {
+						 }
+						 else {
 							Renderer.stroke_counter = 0;
 							shotPrepFrames++;
-						}
+						 }
 					}
 				} 
 
 				//compare markers near cue to successive frames
-				else {
+				else if (Renderer.cuePos != null){
 					boolean success = false;
-					for(int x = 0; x < marker_points.size(); x++) {
-						if(marker_points.get(x).distance(Renderer.restPos) < (Renderer.marker_separation_constant/4)) {
-							success = true;
-							break;
-						}
+					Point closest = findClosest(marker_points);
+					double closest_dist = closest.distance(Renderer.cuePos);
+					double closest_angle = Math.atan2(Renderer.cuePos.y - Renderer.restPos.y, Renderer.cuePos.x - Renderer.restPos.x);
+					if((closest_dist - rest_dist) < (Renderer.marker_separation_constant/8) && (Math.abs(closest_angle - rest_angle) < 1)) {
+						success = true;
 					}
 					if(success) {
 						stillFrames++;
@@ -406,7 +471,23 @@ public class ObjRecognitionController
 						stillFrames = 0;
 						missedFrames = 0;
 						Renderer.restPos = null;
+						rest_dist = 0;
+						rest_angle = 0;
+						shotPrepFrames=0;
 					}
+				}
+			}
+			else {
+				missedFrames++;
+				if(missedFrames > 3) {
+					stillFrames = 0;
+					missedFrames = 0;
+					Renderer.restPos = null;
+					rest_dist = 0;
+					rest_angle = 0;
+					shotPrepFrames=0;
+					Renderer.stroke_prepped = false;
+					Renderer.statusLabel.setText("Aim...");
 				}
 			}
 		}
@@ -439,6 +520,51 @@ public class ObjRecognitionController
 		}
 	}
 
+	private void findAndDrawPockets(Mat maskedImage)
+	{
+		// init
+		List<MatOfPoint> contours = new ArrayList<>();
+		Mat hierarchy = new Mat();
+		
+		// find contours
+		Imgproc.findContours(maskedImage, contours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_NONE);
+		
+		// if any contour exist...
+		if (hierarchy.size().height > 0 && hierarchy.size().width > 0)
+		{
+
+
+			List<org.opencv.core.Point> sceneList = new LinkedList<org.opencv.core.Point>();
+			
+			for (int i = 0; i >= 0; i = (int) hierarchy.get(0, i)[0])
+			{
+	
+				//get bounding rectangle of each contour
+				MatOfPoint2f contours_poly = new MatOfPoint2f();
+				MatOfPoint2f  NewMtx = new MatOfPoint2f( contours.get(i).toArray() );
+				Imgproc.approxPolyDP(NewMtx, contours_poly, 0.1*Imgproc.arcLength(NewMtx,true), true);
+				MatOfPoint  new_poly = new MatOfPoint( contours_poly.toArray() );
+				Rect r =  Imgproc.boundingRect(new_poly); 
+				this.area = r;
+
+				
+				if(H == null) {
+					sceneList.add(new org.opencv.core.Point(r.width + r.x,r.y));
+					sceneList.add(new org.opencv.core.Point(r.x, r.y));
+					sceneList.add(new org.opencv.core.Point(r.x, r.height + r.y));
+					sceneList.add(new org.opencv.core.Point(r.width + r.x, r.height + r.y));
+					MatOfPoint2f obj = new MatOfPoint2f();
+					obj.fromList(sceneList);
+					
+					H = Calib3d.findHomography(contours_poly, obj, Calib3d.LMEDS, 1);
+					Renderer.calculatedHomography = true;
+					Renderer.calibrationPanel.setBackground(new Color(0.7f, 0.7f, 0.7f));
+				}
+				
+			}
+		}
+	}
+
 	private void findAndDrawCueBall(Mat maskedImage)
 	{
 		// init
@@ -449,20 +575,19 @@ public class ObjRecognitionController
 		Imgproc.findContours(maskedImage, contours, hierarchy, Imgproc.RETR_LIST, Imgproc.CHAIN_APPROX_NONE);
 		
 		// if any contour exist...
-		if (contours.size() == 1)
+		if (hierarchy.size().height > 0 && hierarchy.size().width > 0)
 		{
-			//get bounding rectangle of each contour
-			MatOfPoint2f contours_poly = new MatOfPoint2f();
-			MatOfPoint2f  NewMtx = new MatOfPoint2f( contours.get(0).toArray() );
-			Imgproc.approxPolyDP(NewMtx, contours_poly, 3d, true);
-			MatOfPoint  new_poly = new MatOfPoint( contours_poly.toArray() );
-			Rect r =  Imgproc.boundingRect(new_poly); 
 			
-			if((r.width * r.height) > 7500) {
-				Moments M = Imgproc.moments(contours.get(0), false);
-				int cX = (int) (M.get_m10() / M.get_m00());
-				int cY = (int) (M.get_m01() / M.get_m00());
-				cueValues.add(new Point(cX, cY));
+			for (int i = 0; i >= 0; i = (int) hierarchy.get(0, i)[0])
+			{
+				Moments M1 = Imgproc.moments(contours.get(i), false);
+				int cX = (int) (M1.get_m10() / M1.get_m00());
+				int cY = (int) (M1.get_m01() / M1.get_m00());
+				Point temp = new Point(cX, cY);
+				org.opencv.core.Point temp2 = new org.opencv.core.Point(cX, cY);
+				if(Renderer.cuePos == null) {
+					Renderer.cuePos = temp;
+				}
 			}
 		}
 	}

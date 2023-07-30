@@ -2,27 +2,27 @@
 <section name="Workbench">
 	<section name="org.eclipse.ui.texteditor.FindReplaceDialog">
 		<item value="false" key="isRegEx"/>
-		<item value="System" key="selection"/>
+		<item value="this." key="selection"/>
 		<item value="false" key="casesensitive"/>
 		<item value="false" key="incremental"/>
 		<item value="true" key="wrap"/>
 		<item value="false" key="wholeword"/>
 		<list key="findhistory">
-			<item value="System"/>
+			<item value="this."/>
+			<item value="System.out"/>
+			<item value="analyzeForCueBall"/>
+			<item value="this.maskImage"/>
+			<item value="findAndDrawBalls"/>
 			<item value="calibrateCue"/>
+			<item value="analyzeCalibration"/>
+			<item value="maskImage"/>
+			<item value="warp"/>
+			<item value="perspectiveTransform"/>
+			<item value="System"/>
 			<item value="initial"/>
 			<item value="calculateCuePos"/>
 			<item value="cuePos"/>
 			<item value="markerCalibrationPoints"/>
-			<item value="canvas"/>
-			<item value="calibra"/>
-			<item value="arraylist"/>
-			<item value="rotation"/>
-			<item value="setClosed"/>
-			<item value="system"/>
-			<item value="findAndDrawBalls"/>
-			<item value="gl.glBindTexture"/>
-			<item value="gl.glBind"/>
 		</list>
 		<list key="replacehistory">
 		</list>

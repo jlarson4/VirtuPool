@@ -2,6 +2,7 @@ package graphics;
 
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GridLayout;
 import java.awt.Point;
@@ -47,7 +48,7 @@ import opencv.ObjRecognitionController;
 
 public class Renderer{
    
-	private static JFrame frame = null;
+	static JFrame frame = null;
 	private static JSlider slider = new JSlider(JSlider.HORIZONTAL, 90, 270, 90);
 	private static JPanel topPanel = new JPanel();
 	public static JLabel statusLabel = new JLabel("Calibrating...", JLabel.CENTER);
@@ -62,14 +63,24 @@ public class Renderer{
 	public static RigidBody[] ground = new RigidBody[5];
 	
 	public static boolean calibrated = false;
-	
+	public static boolean calculatedHomography = false;
+	public static boolean shot_prediction = true;
 	
 	public static boolean cueMoving = false;
 	public static Point cuePos = null;
 	public static Point restPos = null;
 	public static boolean stroke = false;
-	public static int stroke_counter = 0;
-	public static float marker_separation_constant = 0;
+	public static boolean stroke_prepped = false;
+	public static int stroke_counter = 7;
+	public static float marker_separation_constant = 7;
+	
+	public static boolean p1turn = true;
+	public static JLabel p1scoreLabel = new JLabel();
+	public static JLabel p2scoreLabel = new JLabel();
+	public static JPanel p1Panel = new JPanel();
+	public static JPanel p2Panel = new JPanel();
+	
+	public static JPanel calibrationPanel = new JPanel();
 	
 	public static void init () {
 		frame = new JFrame( "VirtuPool" );
@@ -87,12 +98,12 @@ public class Renderer{
 	
 	public static void initializeGame() {
 		if(calibrated) {
-			System.out.print(marker_separation_constant);
 			frame.getContentPane().removeAll();
 			
 			initializePhysics();
 			
 			initializeGL();
+			//Renderer.cueBall.applyForce(new Vector3f(500, 0, 10), new Vector3f(0,0,0));
 			
 	//		start the camera capture
 		    ObjRecognitionController o = new ObjRecognitionController();
@@ -118,8 +129,9 @@ public class Renderer{
 	
 	private static void initializeCalibration() {
 		// TODO Auto-generated method stub
-		JPanel calibrationPanel = new JPanel();
-		calibrationPanel.setBackground(Color.BLACK);
+		
+		// later do this 
+		calibrationPanel.setBackground(new Color(1f, 0f, 1f));
 		
 		JLabel calibrationInstructions = new JLabel("Hold Pool Cue in the center of the screen and begin calibration", JLabel.CENTER);
 		calibrationInstructions.setFont(new Font("Verdana",1,30));
@@ -151,7 +163,7 @@ public class Renderer{
 		
 	}
 
-	private static void initializePhysics() {
+	public static void initializePhysics() {
 
 		float[][] positions = {
 			{28, 1f, 0},
@@ -229,7 +241,7 @@ public class Renderer{
 		RigidBodyConstructionInfo fallRigidBodyCI = new RigidBodyConstructionInfo(mass,fallMotionState,fallShape,fallInertia); 
 		fallRigidBodyCI.restitution = .5f;
 		fallRigidBodyCI.angularDamping = .95f;
-		cueBall = new RigidBody(fallRigidBodyCI);   
+		cueBall = new RigidBody(fallRigidBodyCI);  
 		cueBall.setFriction(.5f); 
 
 		//now we add it to our physics simulation 
@@ -279,6 +291,7 @@ public class Renderer{
 			public void stateChanged(ChangeEvent e) {
 				JSlider source = (JSlider)e.getSource();
 				EventListener.rotation = (int)source.getValue();
+				cuePos = null;
 			}
 			
 		});
@@ -298,31 +311,148 @@ public class Renderer{
 		statusLabel.setFont(new Font("Verdana",1,30));
 		topPanel.add(statusLabel, 0);
 		
-		JPanel p1panel = new JPanel();
-		p1panel.setLayout(new GridLayout(2, 1));
+		p1Panel = new JPanel();
+		p1Panel.setLayout(new GridLayout(2, 1));
 		JLabel p1status = new JLabel("Player 1", JLabel.CENTER);
 		p1status.setFont(new Font("Verdana",1,20));
-		JLabel p1score = new JLabel("7", JLabel.CENTER);
-		p1score.setFont(new Font("Verdana",1,12));
-		p1panel.add(p1status);
-		p1panel.add(p1score);
-		topPanel.add(p1panel, 1);
+		p1Panel.setOpaque(true);
+		p1Panel.setBackground(Color.CYAN);
 
-		JPanel p2panel = new JPanel();
-		p2panel.setLayout(new GridLayout(2, 1));
+		p1scoreLabel = new JLabel("7", JLabel.CENTER);
+		p1scoreLabel.setFont(new Font("Verdana",1,12));
+		p1Panel.add(p1status);
+		p1Panel.add(p1scoreLabel);
+		topPanel.add(p1Panel, 1);
+
+		p2Panel = new JPanel();
+		p2Panel.setLayout(new GridLayout(2, 1));
 		JLabel p2status = new JLabel("Player 2", JLabel.CENTER);
 		p2status.setFont(new Font("Verdana",1,20));
-		JLabel p2score = new JLabel("7", JLabel.CENTER);
-		p2score.setFont(new Font("Verdana",1,12));
-		p2panel.add(p2status);
-		p2panel.add(p2score);
-		topPanel.add(p2panel, 2);
+		p2Panel.setOpaque(true);
+		p2Panel.setBackground(Color.WHITE);
+		
+		p2scoreLabel = new JLabel("7", JLabel.CENTER);
+		p2scoreLabel.setFont(new Font("Verdana",1,12));
+		p2Panel.add(p2status);
+		p2Panel.add(p2scoreLabel);
+		topPanel.add(p2Panel, 2);
 		
 		JButton menuButton = new JButton("Menu");
 		menuButton.addActionListener(new ActionListener()  {
 			@Override
 			public void actionPerformed(ActionEvent actionEvent) {
-					//do menu things here
+				JFrame menuFrame = new JFrame( "VirtuPool" );
+				//clear frame
+				menuFrame.getContentPane().removeAll();
+				
+				JPanel menuPanel = new JPanel();
+				menuPanel.setLayout(new GridLayout(4, 1));
+				menuPanel.setBorder(new EmptyBorder(100,100,100,100));
+				
+				
+				String s = "";
+				if(Renderer.shot_prediction) {
+					s = "Turn Off Shot Tracer";
+				}
+				else {
+					s = "Turn On Shot Tracer";
+				}
+				JButton guideButton = new JButton(s);
+				guideButton.addActionListener(new ActionListener() {
+
+					@Override
+					public void actionPerformed(ActionEvent arg0) {
+						if(Renderer.shot_prediction) {
+							Renderer.shot_prediction = false;
+							guideButton.setText("Turn On Shot Tracer");
+						}
+						else {
+							Renderer.shot_prediction = true;
+							guideButton.setText("Turn Off Shot Tracer");
+						}
+					}
+					
+				});
+				JPanel buttonPanel = new JPanel();
+				buttonPanel.setLayout(new GridLayout(1, 3));
+				buttonPanel.setBorder(new EmptyBorder(50,100,50,100));
+
+				buttonPanel.add(new JPanel());
+				buttonPanel.add(guideButton);
+				buttonPanel.add(new JPanel());
+				menuPanel.add(buttonPanel);
+				
+				JButton resetButton = new JButton("Restart Game");
+				resetButton.addActionListener(new ActionListener() {
+
+					@Override
+					public void actionPerformed(ActionEvent arg0) {
+						 cuePos = null;
+						 cueMoving = false;
+						 cuePos = null;
+						 restPos = null;
+						 stroke = false;
+						 stroke_prepped = true;
+						 stroke_counter = 0;
+						 balls = new RigidBody[15];
+						 ground = new RigidBody[5];
+						 initializePhysics();
+						 menuFrame.dispatchEvent(new WindowEvent(menuFrame, WindowEvent.WINDOW_CLOSING));
+					}
+					
+				});buttonPanel = new JPanel();
+				buttonPanel.setLayout(new GridLayout(1, 3));
+				buttonPanel.setBorder(new EmptyBorder(50,100,50,100));
+
+				buttonPanel.add(new JPanel());
+				buttonPanel.add(resetButton);
+				buttonPanel.add(new JPanel());
+				menuPanel.add(buttonPanel);
+				
+
+				JButton quitButton = new JButton("Quit Game");
+				quitButton.addActionListener(new ActionListener() {
+
+					@Override
+					public void actionPerformed(ActionEvent arg0) {
+						 frame.dispatchEvent(new WindowEvent(menuFrame, WindowEvent.WINDOW_CLOSING));	
+						 menuFrame.dispatchEvent(new WindowEvent(menuFrame, WindowEvent.WINDOW_CLOSING));	
+					}
+					
+				});buttonPanel = new JPanel();
+				buttonPanel.setLayout(new GridLayout(1, 3));
+				buttonPanel.setBorder(new EmptyBorder(50,100,50,100));
+
+				buttonPanel.add(new JPanel());
+				buttonPanel.add(quitButton);
+				buttonPanel.add(new JPanel());
+				menuPanel.add(buttonPanel);
+				
+				JButton cancelButton = new JButton("Close Menu");
+				cancelButton.setPreferredSize(new Dimension(40, 40));
+				cancelButton.addActionListener(new ActionListener() {
+
+					@Override
+					public void actionPerformed(ActionEvent arg0) {
+						 menuFrame.dispatchEvent(new WindowEvent(menuFrame, WindowEvent.WINDOW_CLOSING));	
+					}
+					
+				});buttonPanel = new JPanel();
+				buttonPanel.setLayout(new GridLayout(1, 3));
+				buttonPanel.setBorder(new EmptyBorder(50,100,50,100));
+
+				buttonPanel.add(new JPanel());
+				buttonPanel.add(cancelButton);
+				buttonPanel.add(new JPanel());
+				menuPanel.add(buttonPanel);
+				
+				// initialize calibration fields
+				menuFrame.getContentPane().add( menuPanel, BorderLayout.CENTER );
+	
+				menuFrame.setLocationRelativeTo(null);
+				menuFrame.setExtendedState(JFrame.MAXIMIZED_BOTH); 
+			    menuFrame.setUndecorated(true);
+				menuFrame.setVisible( true );
 			}
 		});
 		topPanel.add(menuButton, 3);
@@ -330,13 +460,13 @@ public class Renderer{
 	}
 	
 	private static void buildGround(DiscreteDynamicsWorld dynamicsWorld) {
-		CollisionShape groundShape = new BoxShape(new Vector3f(60f, 2f, 26f));
-		CollisionShape groundSides = new BoxShape(new Vector3f(27f, 2f, 2f));
+		CollisionShape groundShape = new BoxShape(new Vector3f(60f, 1f, 26f));
+		CollisionShape groundSides = new BoxShape(new Vector3f(27f, 1f, 2f));
 		
-		float[][] origins = {{26, -2, 28}, {26, -2, -28}, {-26, -2, 28}, {-26, -2, -28}};
+		float[][] origins = {{29, -1, 28}, {29, -1, -28}, {-29, -1, 28}, {-29, -1, -28}};
 		
 		// setup the motion state
-		DefaultMotionState groundMotionState = new DefaultMotionState(new Transform(new Matrix4f(new Quat4f(0, 0, 0, 1), new Vector3f(0, -2, 0), 1.0f))); 
+		DefaultMotionState groundMotionState = new DefaultMotionState(new Transform(new Matrix4f(new Quat4f(0, 0, 0, 1), new Vector3f(0, -1, 0), 1.0f))); 
 		
 
 		// setup the center of the ground

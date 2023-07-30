@@ -1,16 +1,5 @@
 <?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <qualifiedTypeNameHistroy>
-    <fullyQualifiedTypeName name="com.bulletphysics.linearmath.DefaultMotionState"/>
-    <fullyQualifiedTypeName name="com.bulletphysics.dynamics.RigidBodyConstructionInfo"/>
-    <fullyQualifiedTypeName name="com.bulletphysics.dynamics.RigidBody"/>
-    <fullyQualifiedTypeName name="com.bulletphysics.linearmath.MotionState"/>
-    <fullyQualifiedTypeName name="com.bulletphysics.collision.broadphase.BroadphaseInterface"/>
-    <fullyQualifiedTypeName name="com.bulletphysics.collision.broadphase.DbvtBroadphase"/>
-    <fullyQualifiedTypeName name="com.bulletphysics.collision.shapes.StaticPlaneShape"/>
-    <fullyQualifiedTypeName name="com.bulletphysics.collision.shapes.SphereShape"/>
-    <fullyQualifiedTypeName name="javax.vecmath.Matrix4f"/>
-    <fullyQualifiedTypeName name="javax.vecmath.Quat4f"/>
-    <fullyQualifiedTypeName name="com.bulletphysics.collision.shapes.BoxShape"/>
     <fullyQualifiedTypeName name="javax.vecmath.Vector3d"/>
     <fullyQualifiedTypeName name="java.nio.DoubleBuffer"/>
     <fullyQualifiedTypeName name="javax.vecmath.Vector3f"/>
@@ -55,9 +44,20 @@
     <fullyQualifiedTypeName name="java.awt.event.ActionEvent"/>
     <fullyQualifiedTypeName name="javax.vecmath.Point2f"/>
     <fullyQualifiedTypeName name="java.awt.Point"/>
-    <fullyQualifiedTypeName name="java.lang.System"/>
-    <fullyQualifiedTypeName name="java.awt.Color"/>
     <fullyQualifiedTypeName name="javax.swing.border.EmptyBorder"/>
-    <fullyQualifiedTypeName name="graphics.Renderer"/>
+    <fullyQualifiedTypeName name="java.util.ArrayList"/>
+    <fullyQualifiedTypeName name="java.awt.List"/>
+    <fullyQualifiedTypeName name="com.bulletphysics.collision.broadphase.BroadphaseInterface"/>
+    <fullyQualifiedTypeName name="com.bulletphysics.collision.dispatch.CollisionObject"/>
+    <fullyQualifiedTypeName name="com.bulletphysics.collision.narrowphase.ManifoldPoint"/>
+    <fullyQualifiedTypeName name="java.lang.System"/>
+    <fullyQualifiedTypeName name="com.jogamp.nativewindow.util.Dimension"/>
+    <fullyQualifiedTypeName name="java.awt.Dimension"/>
+    <fullyQualifiedTypeName name="java.awt.Color"/>
     <fullyQualifiedTypeName name="javax.swing.JLabel"/>
+    <fullyQualifiedTypeName name="graphics.Renderer"/>
+    <fullyQualifiedTypeName name="org.opencv.calib3d.Calib3d"/>
+    <fullyQualifiedTypeName name="java.util.LinkedList"/>
+    <fullyQualifiedTypeName name="org.opencv.features2d.FeatureDetector"/>
+    <fullyQualifiedTypeName name="org.opencv.core.MatOfKeyPoint"/>
 </qualifiedTypeNameHistroy>
